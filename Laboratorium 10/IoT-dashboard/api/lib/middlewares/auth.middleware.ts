@@ -13,9 +13,17 @@ export const auth = (req: Request, res: Response, next: NextFunction): void => {
 
         try {
             const decoded = jwt.verify(token, config.JwtSecret) as IUser;
-            (req as any).user = decoded; // jeśli nie masz rozszerzenia typów
+
+            console.log('Token OK:', decoded);
+
+            if (!decoded.role) {
+                console.warn('❗ Brak roli w tokenie');
+            }
+
+            (req as any).user = decoded;
             next();
         } catch (err) {
+            console.error('JWT error:', err.message);
             res.status(400).send('Nieprawidłowy token.');
         }
     } else {

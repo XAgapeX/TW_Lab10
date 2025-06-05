@@ -4,6 +4,7 @@ import UserService from '../modules/services/user.service';
 import PasswordService from '../modules/services/password.service';
 import TokenService from '../modules/services/token.service';
 import { auth } from '../middlewares/auth.middleware';
+import { hasRole } from '../middlewares/role.middleware';
 
 class UserController implements Controller {
     public path = '/api/user';
@@ -23,7 +24,12 @@ class UserController implements Controller {
     private initializeRoutes(): void {
         this.router.post(`${this.path}/create`, this.createNewOrUpdate);
         this.router.post(`${this.path}/auth`, this.authenticate);
-        this.router.delete(`${this.path}/logout/:userId`, auth, this.removeHashSession);
+        this.router.post(`${this.path}/reset`, this.resetPassword);
+        this.router.delete(`${this.path}/logout/:userId`, auth, hasRole(['admin']), this.removeHashSession);
+        this.router.delete('/api/token/expired', async (req, res) => {
+            const result = await this.tokenService.removeExpiredTokens();
+            res.status(200).json(result);
+        });
     }
 
     private createNewOrUpdate = async (req: Request, res: Response): Promise<void> => {
@@ -35,7 +41,7 @@ class UserController implements Controller {
             if (userData.password) {
                 const hashedPassword = await this.passwordService.hashPassword(userData.password);
                 await this.passwordService.createOrUpdate({
-                    userId: user._id,  // <-- poprawka tutaj
+                    userId: user._id,
                     password: hashedPassword,
                 });
             }
@@ -81,6 +87,28 @@ class UserController implements Controller {
             res.status(401).json({ error: 'Unauthorized' });
         }
     };
+
+    private resetPassword = async (req: Request, res: Response) => {
+        const { email } = req.body;
+        if (!email) return res.status(400).json({ error: 'Email wymagany' });
+
+        try {
+            const user = await this.userService.getByEmailOrName(email);
+            if (!user) return res.status(404).json({ error: 'Użytkownik nie znaleziony' });
+
+            const newPassword = Math.random().toString(36).slice(-8);
+            const hashed = await this.passwordService.hashPassword(newPassword);
+            await this.passwordService.createOrUpdate({ userId: user._id!, password: hashed });
+
+            console.log(`Nowe hasło dla ${user.email}: ${newPassword}`);
+
+            res.status(200).json({ message: 'Hasło zresetowane. Sprawdź skrzynkę e-mail.' });
+        } catch (err: any) {
+            console.error('Błąd resetowania hasła:', err.message);
+            res.status(500).json({ error: 'Błąd serwera' });
+        }
+    };
+
 }
 
 export default UserController;

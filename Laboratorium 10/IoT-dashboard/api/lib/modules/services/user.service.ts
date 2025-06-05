@@ -9,13 +9,18 @@ class UserService {
             }
 
             if (!user._id) {
+                const existingUser = await UserModel.findOne({ email: user.email });
+                if (existingUser) {
+                    throw new Error('Użytkownik z tym adresem e-mail już istnieje.');
+                }
+
                 const dataModel = new UserModel(user);
                 return await dataModel.save();
             } else {
                 return await UserModel.findByIdAndUpdate(user._id, { $set: user }, { new: true });
             }
-        } catch (error) {
-            console.error('Błąd podczas tworzenia użytkownika:', error);
+        } catch (error: any) {
+            console.error('Błąd podczas tworzenia użytkownika:', error.message);
             throw new Error('Błąd przy tworzeniu użytkownika');
         }
     }
